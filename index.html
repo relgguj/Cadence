@@ -1239,7 +1239,7 @@ function buildStatsWidget(){
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
     <div style="background:var(--bg);border-radius:10px;padding:10px 12px;"><div style="font-size:22px;font-weight:600;">${S.teachers.length}</div><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em;font-weight:500;">Teachers</div></div>
     <div style="background:var(--bg);border-radius:10px;padding:10px 12px;"><div style="font-size:22px;font-weight:600;">${S.logs.length}</div><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em;font-weight:500;">Observations</div></div>
-    <div style="background:var(--bg);border-radius:10px;padding:10px 12px;"><div style="font-size:22px;font-weight:600;">${S.debriefs.length}</div><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em;font-weight:500;">Debriefs</div></div>
+    <div style="background:var(--bg);border-radius:10px;padding:10px 12px;"><div style="font-size:22px;font-weight:600;">${S.debriefs.filter(d=>S.logs.find(l=>l.id===d.obsId)).length}</div><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em;font-weight:500;">Debriefs</div></div>
     <div style="background:var(--bg);border-radius:10px;padding:10px 12px;"><div style="font-size:22px;font-weight:600;">${S.interactions.length}</div><div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.04em;font-weight:500;">Interactions</div></div>
   </div>`;
 }
