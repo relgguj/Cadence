@@ -238,8 +238,7 @@ textarea{resize:vertical;}
 .cal-step-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;font-size:12px;color:var(--txt2);line-height:1.5;}
 .cal-step-row:last-child{margin-bottom:0;}
 .cal-step-num{width:20px;height:20px;background:var(--green);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px;}
-/* Sample data banner */
-.sample-banner{background:var(--al);border:1px solid #fde68a;border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;font-size:13px;color:#92400e;}
+
 /* Obs panel inside debrief modal */
 .obs-panel{background:var(--bl);border:1px solid #bfdbfe;border-radius:10px;margin-bottom:16px;overflow:hidden;}
 .obs-panel-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;user-select:none;}
@@ -251,6 +250,10 @@ textarea{resize:vertical;}
 .debrief-linked-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500;background:var(--pl);color:var(--purple);cursor:pointer;}
 .debrief-linked-pill:hover{background:#ede9fe;}
 .no-debrief-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;background:#f1efe8;color:var(--txt3);}
+/* Task / recent-activity row inside dashboard widgets */
+.task-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-bottom:1px solid var(--bdr);cursor:pointer;transition:background .12s;}
+.task-row:last-child{border-bottom:none;}
+.task-row:hover{background:var(--bg);}
 /* Row styles */
 .tr{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--sur);border:1px solid var(--bdr);border-radius:10px;margin-bottom:6px;cursor:pointer;}
 .tr:hover{border-color:var(--green);}
@@ -443,13 +446,8 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
     <h2 style="font-size:16px;font-weight:600;">Dashboard</h2>
     <div style="display:flex;gap:8px;">
-      <button class="btn btn-amber btn-sm" onclick="loadSampleData()" id="sample-btn">Load sample data</button>
       <button class="btn btn-o btn-sm" onclick="openCustomizeMenu()">⚙ Customize</button>
     </div>
-  </div>
-  <div id="sample-banner" style="display:none;" class="sample-banner">
-    <span>📊 Sample data is loaded — explore freely, then clear it when you're ready.</span>
-    <button class="btn btn-sm btn-o" style="border-color:#92400e;color:#92400e;" onclick="clearSampleData()">Clear sample data</button>
   </div>
   <div class="grid-stack" id="dash-grid"></div>
 </div>
@@ -595,7 +593,7 @@ textarea{resize:vertical;}
         </div>
       </div>
       <div class="fr">
-        <label>Duration (min)</label>
+        <label>Duration (min) <span style="font-weight:400;color:var(--txt3);font-size:11px;">— or mark status if it didn't happen</span></label>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <input type="number" id="lint-dur" placeholder="custom" min="0" style="max-width:110px;">
           <div style="display:flex;gap:5px;flex-wrap:wrap;">
@@ -605,8 +603,12 @@ textarea{resize:vertical;}
             <button type="button" class="dur-chip" onclick="setDuration('lint-dur',30)">30m</button>
             <button type="button" class="dur-chip" onclick="setDuration('lint-dur',45)">45m</button>
             <button type="button" class="dur-chip" onclick="setDuration('lint-dur',60)">60m</button>
+            <span style="color:var(--txt3);font-size:11px;margin:0 2px;">|</span>
+            <button type="button" class="dur-chip" data-status="No show" onclick="setIntStatus('lint',this)">No show</button>
+            <button type="button" class="dur-chip" data-status="No response" onclick="setIntStatus('lint',this)">No response</button>
           </div>
         </div>
+        <input type="hidden" id="lint-status" value="">
       </div>
       <div class="fr"><label>Quick notes</label><textarea id="lint-notes" rows="3" placeholder="What was discussed? Any decisions made? Next steps?"></textarea></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -637,9 +639,9 @@ textarea{resize:vertical;}
       </select>
       <select id="lfilter" onchange="renderLog()" style="max-width:200px;"><option value="">All teachers</option></select>
       <select id="lschool-filter" onchange="renderLog()" style="max-width:180px;"><option value="">All schools</option></select>
-      <select id="lsort" onchange="renderLog()" style="max-width:170px;">
-        <option value="newest">Newest first</option>
-        <option value="oldest">Oldest first</option>
+      <select id="lsort" onchange="renderLog()" style="max-width:200px;">
+        <option value="newest">Newest date first</option>
+        <option value="oldest">Oldest date first</option>
         <option value="teacher">By teacher A–Z</option>
         <option value="nodebrief">Obs with no debrief</option>
       </select>
@@ -659,13 +661,21 @@ let timerInt=null,timerSec=0,timerOn=false;
 let dashWidgets=[
   {id:'stats',label:'Stats',on:false,x:0,y:0,w:12,h:2},
   {id:'actions',label:'Quick Actions',on:true,x:0,y:0,w:3,h:5},
-  {id:'calendar',label:'Coaching Schedule',on:true,x:3,y:0,w:5,h:5}
+  {id:'calendar',label:'Coaching Schedule',on:true,x:3,y:0,w:5,h:5},
+  {id:'tasks',label:'Tasks',on:true,x:8,y:0,w:4,h:5},
+  {id:'recent',label:'Recent Activity',on:true,x:0,y:5,w:6,h:5}
 ];
-let sampleLoaded=false;
-
 try{const sv=localStorage.getItem('mch_v9');if(sv){const p=JSON.parse(sv);S=p.S||S;dashWidgets=p.dashWidgets||dashWidgets;}}catch(e){}
-// Remove deprecated widgets from saved state
-dashWidgets=dashWidgets.filter(w=>w.id!=='recent');
+// Ensure users who signed in before Tasks/Recent existed still get them added to their layout.
+// Placed below any existing widgets so we don't overlap the user's current arrangement.
+if(!dashWidgets.find(w=>w.id==='tasks')){
+  const maxY=Math.max(0,...dashWidgets.filter(w=>w.on).map(w=>w.y+w.h));
+  dashWidgets.push({id:'tasks',label:'Tasks',on:true,x:0,y:maxY,w:4,h:5});
+}
+if(!dashWidgets.find(w=>w.id==='recent')){
+  const maxY=Math.max(0,...dashWidgets.filter(w=>w.on).map(w=>w.y+w.h));
+  dashWidgets.push({id:'recent',label:'Recent Activity',on:true,x:0,y:maxY,w:6,h:5});
+}
 // Migrate from old `cols`-only format to Gridstack x/y/w/h
 let _migX=0;
 dashWidgets.forEach(w=>{
@@ -940,6 +950,29 @@ function setDuration(inputId,minutes){
   wrap.querySelectorAll('.dur-chip').forEach(c=>c.classList.remove('active'));
   const chips=wrap.querySelectorAll('.dur-chip');
   chips.forEach(c=>{if(c.textContent===`${minutes}m`)c.classList.add('active');});
+  // Clear any status pick since we now have a duration (implies Completed)
+  const statusInput=wrap.querySelector('input[type="hidden"][id$="-status"]');
+  if(statusInput)statusInput.value='';
+}
+
+// Mark an interaction as "No show" or "No response" — clears duration and highlights the chip.
+// prefix is 'lint' for the new-interaction form or 'ie' for the edit modal.
+function setIntStatus(prefix,btn){
+  const status=btn.dataset.status;
+  const statusInput=gi(`${prefix}-status`);
+  const durInput=gi(`${prefix}-dur`);
+  if(!statusInput)return;
+  // Toggle: clicking the currently-active status clears it
+  const isActive=btn.classList.contains('active');
+  const wrap=btn.closest('.fr');if(!wrap)return;
+  wrap.querySelectorAll('.dur-chip').forEach(c=>c.classList.remove('active'));
+  if(isActive){
+    statusInput.value='';
+  } else {
+    statusInput.value=status;
+    btn.classList.add('active');
+    if(durInput)durInput.value='';
+  }
 }
 
 function toggleIntTypeDropdown(){
@@ -1216,6 +1249,8 @@ function buildWidget(w){
   if(w.id==='stats') return buildStatsWidget();
   if(w.id==='actions') return buildActionsWidget();
   if(w.id==='calendar') return buildCalWidget();
+  if(w.id==='tasks') return buildTasksWidget();
+  if(w.id==='recent') return buildRecentWidget();
   if(w.id.startsWith('ws-')) return buildWsWidget(w);
   return `<div class="widget-label">${w.label}</div>`;
 }
@@ -1253,6 +1288,95 @@ function buildActionsWidget(){
     <button class="btn btn-o" style="justify-content:flex-start;" onclick="nav('resources')">+ Add a resource</button>
     <button class="btn btn-o" style="justify-content:flex-start;" onclick="nav('teachers')">+ Add a teacher</button>
   </div>`;
+}
+
+// Tasks widget: things that still need doing.
+// (1) Observations without a debrief planned → click to plan the debrief.
+// (2) Planned debriefs that haven't been marked complete yet → click to open.
+function buildTasksWidget(){
+  const needDebrief=S.logs.filter(l=>!S.debriefs.find(d=>d.obsId===l.id))
+    .slice().sort((a,b)=>b.id-a.id);
+  const upcoming=S.debriefs.filter(d=>!d.completed&&S.logs.find(l=>l.id===d.obsId))
+    .slice().sort((a,b)=>b.id-a.id);
+  const needDebriefHtml=needDebrief.length
+    ? needDebrief.slice(0,5).map(l=>`
+        <div class="task-row" onclick="goDebriefFromLog(${l.id})">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:600;">${esc(l.teacher)}</div>
+            <div style="font-size:11px;color:var(--txt3);">${esc(l.date)}${l.focus?' · '+esc(l.focus):''}</div>
+          </div>
+          <span style="font-size:11px;color:var(--green);font-weight:500;white-space:nowrap;">Plan →</span>
+        </div>`).join('')+(needDebrief.length>5?`<div style="font-size:11px;color:var(--txt3);padding:4px 0;">+${needDebrief.length-5} more</div>`:'')
+    : `<div style="font-size:12px;color:var(--txt3);padding:4px 0;">All observations have a debrief planned. 🎉</div>`;
+  const upcomingHtml=upcoming.length
+    ? upcoming.slice(0,5).map(d=>{
+        const preview=d.change||d.praise||'';
+        return `<div class="task-row" onclick="openDebrief(${d.id})">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:600;">${esc(d.teacher)}</div>
+            <div style="font-size:11px;color:var(--txt3);">${esc(d.date||'No date')}${preview?' · '+esc(preview.substring(0,40))+(preview.length>40?'…':''):''}</div>
+          </div>
+          <button class="btn btn-o btn-xs" style="padding:2px 7px;white-space:nowrap;" onclick="event.stopPropagation();markDebriefComplete(${d.id})" title="Mark this debrief as held">✓ Done</button>
+        </div>`;
+      }).join('')+(upcoming.length>5?`<div style="font-size:11px;color:var(--txt3);padding:4px 0;">+${upcoming.length-5} more</div>`:'')
+    : `<div style="font-size:12px;color:var(--txt3);padding:4px 0;">No upcoming debriefs.</div>`;
+  return `<div class="widget-label">Tasks</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--txt3);margin:4px 0 4px;">Observations needing a debrief</div>
+    ${needDebriefHtml}
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--txt3);margin:12px 0 4px;">Upcoming debriefs</div>
+    ${upcomingHtml}`;
+}
+
+// Recent Activity widget: last 6 log entries (observations + interactions), most recently
+// created on top, click to open detail modal. Uses id (creation time) intentionally so this
+// stays a true "recent activity" feed even when older-dated entries are backfilled.
+function buildRecentWidget(){
+  const items=[
+    ...S.logs.map(l=>({...l,_type:'obs'})),
+    ...S.interactions.map(i=>({...i,_type:'int'}))
+  ].sort((a,b)=>b.id-a.id).slice(0,6);
+  if(!items.length){
+    return `<div class="widget-label">Recent activity</div>
+      <div style="font-size:12px;color:var(--txt3);padding:4px 0;">Nothing logged yet.</div>`;
+  }
+  const rows=items.map(e=>{
+    if(e._type==='obs'){
+      return `<div class="task-row" onclick="openObsModal(${e.id})">
+        <span class="log-type-badge lt-obs" style="flex-shrink:0;">Obs</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:600;">${esc(e.teacher)}</div>
+          <div style="font-size:11px;color:var(--txt3);">${esc(e.date)}${e.focus?' · '+esc(e.focus):''}</div>
+        </div>
+      </div>`;
+    }
+    const typeList=e.types&&Array.isArray(e.types)?e.types:(e.type?e.type.split(',').map(s=>s.trim()):['Other']);
+    const firstType=typeList[0]||'Other';
+    return `<div class="task-row" onclick="openIntModal(${e.id})">
+      <span class="log-type-badge lt-${firstType.toLowerCase().replace(/[\s/]+/g,'-')}" style="flex-shrink:0;">${esc(firstType)}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;">${esc(e.teacher)}</div>
+        <div style="font-size:11px;color:var(--txt3);">${esc(e.date)}${e.status?' · '+esc(e.status):(e.duration?' · '+e.duration+'m':'')}</div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="widget-label">Recent activity</div>${rows}`;
+}
+
+// Mark a debrief as held from the Tasks widget.
+function markDebriefComplete(id){
+  const d=S.debriefs.find(x=>x.id===id);if(!d)return;
+  d.completed=true;
+  save();renderDash();
+  flash('✓ Debrief marked as held');
+}
+// Toggle held / upcoming from within the debrief view modal, then re-render the modal so the
+// button label flips and the "Held" badge shows/hides without needing to close and reopen.
+function toggleDebriefComplete(id){
+  const d=S.debriefs.find(x=>x.id===id);if(!d)return;
+  d.completed=!d.completed;
+  save();renderDash();
+  flash(d.completed?'✓ Marked as held':'↩ Marked as upcoming');
+  openDebrief(id);
 }
 
 function buildCalWidget(){
@@ -1335,84 +1459,6 @@ function openGCal(){window.open('https://calendar.google.com','_blank');}
 function resizeWidget(){/* no-op — Gridstack handles all resizing now */}
 
 // ── SAMPLE DATA ──
-function loadSampleData(){
-  if(sampleLoaded){flash('Sample data already loaded.');return;}
-  const sTeachers=[
-    {name:'Ms. Johnson',grade:'4th grade math',room:'Room 102',school:'Lincoln Elementary',email:'johnson@lincoln.edu',notes:'Working on number talks',id:1000},
-    {name:'Mr. Patel',grade:'6th grade math',room:'Room 214',school:'Riverside Middle',email:'patel@riverside.edu',notes:'Strong with discourse',id:1001},
-    {name:'Ms. Chen',grade:'3rd grade math',room:'Room 108',school:'Lincoln Elementary',email:'chen@lincoln.edu',notes:'New teacher, 2nd year',id:1002},
-    {name:'Mr. Rodriguez',grade:'5th grade math',room:'Room 205',school:'Lincoln Elementary',email:'rodriguez@lincoln.edu',notes:'Veteran teacher, open to coaching',id:1003},
-    {name:'Ms. Williams',grade:'7th grade math',room:'Room 301',school:'Riverside Middle',email:'williams@riverside.edu',notes:'Pre-algebra focus this year',id:1004},
-    {name:'Ms. Park',grade:'2nd grade math',room:'Room 110',school:'Lincoln Elementary',email:'park@lincoln.edu',notes:'Loves manipulatives',id:1005},
-    {name:'Mr. Brooks',grade:'8th grade algebra',room:'Room 312',school:'Riverside Middle',email:'brooks@riverside.edu',notes:'First year teaching algebra',id:1006},
-    {name:'Ms. Thompson',grade:'1st grade math',room:'Room 115',school:'Lincoln Elementary',email:'thompson@lincoln.edu',notes:'Working on small group instruction',id:1007},
-  ];
-  const sLogs=[
-    {teacher:'Ms. Johnson',date:'April 22',focus:'Number talks',link:'',notes:'[9:14 AM] Class started with number talk — 15 min\n[9:29 AM] Transition to partner work on fractions\n[9:44 AM] 4 out of 6 groups stayed on task\nTeacher used good wait time but revoicing was limited.',id:2000},
-    {teacher:'Mr. Patel',date:'April 19',focus:'Math discourse',link:'',notes:'[1:02 PM] Launch — teacher modeled problem\n[1:15 PM] Students worked independently first, then pairs\nStrong questioning observed — 3 open-ended Qs in 10 min',id:2001},
-    {teacher:'Ms. Chen',date:'April 24',focus:'Exit tickets',link:'',notes:'[10:30 AM] Lesson on place value\n[10:55 AM] Exit ticket — only 8/22 completed\nPacing was the main concern today.',id:2002},
-    {teacher:'Mr. Rodriguez',date:'April 21',focus:'Small group rotations',link:'',notes:'[11:00 AM] Strong launch with multiplication strategies\n[11:18 AM] Smooth transition to rotations\nGroups stayed engaged — great use of timer and visual cues.',id:2003},
-    {teacher:'Ms. Williams',date:'April 26',focus:'Equation solving',link:'',notes:'[2:05 PM] Students working on 2-step equations\n[2:22 PM] Common error: order of operations\nWould benefit from anticipating misconceptions in lesson plan.',id:2004},
-    {teacher:'Ms. Park',date:'April 28',focus:'Manipulatives use',link:'',notes:'[10:15 AM] Students using base-10 blocks\n[10:30 AM] Strong vocabulary use throughout\nTeacher prompted students to explain their thinking — excellent.',id:2005},
-    {teacher:'Mr. Brooks',date:'April 29',focus:'Lesson pacing',link:'',notes:'[1:30 PM] Bell ringer took 12 min — too long\n[1:50 PM] Only got through 1 example before exit ticket\nStruggled to wrap up cleanly. Pacing is the priority.',id:2006},
-  ];
-  const sInteractions=[
-    {teacher:'Ms. Johnson',date:'April 23',type:'Debrief',types:['Debrief'],duration:30,location:'Room 102',notes:'Debrief from 4/22 observation. Discussed number talk structure. Will try revoicing protocol next week.',id:3000},
-    {teacher:'Mr. Patel',date:'April 20',type:'Co-planning',types:['Co-planning'],duration:45,location:'Zoom',notes:'Co-planned Friday lesson on ratios. Agreed on launch problem.',id:3001},
-    {teacher:'Ms. Chen',date:'April 25',type:'Meeting/Check-in',types:['Meeting/Check-in'],duration:15,location:'Hallway',notes:'Quick check-in — she felt the pacing issue too. Scheduled a co-planning session.',id:3002},
-    {teacher:'Mr. Rodriguez',date:'April 18',type:'Walkthrough',types:['Walkthrough'],duration:10,location:'Room 205',notes:'Brief walkthrough during rotations — students engaged, teacher checking in with each group.',id:3003},
-    {teacher:'Ms. Williams',date:'April 24',type:'Co-planning, PLC',types:['Co-planning','PLC'],duration:60,location:'Library',notes:'Co-planning during PLC time. Group worked through Unit 6 launch and discussed common misconceptions.',id:3004},
-    {teacher:'Ms. Park',date:'April 22',type:'Real-time coaching',types:['Real-time coaching'],duration:25,location:'Room 110',notes:'In-class side-by-side coaching during small group time. Whispered prompts about questioning. She tried 4 of the 5 prompts naturally.',id:3005},
-    {teacher:'Mr. Brooks',date:'April 27',type:'Email',types:['Email'],duration:5,location:'',notes:'Sent pacing self-reflection template via email. Asked him to bring his completed reflection to our Friday meeting.',id:3006},
-    {teacher:'Ms. Johnson',date:'April 28',type:'PLC',types:['PLC'],duration:45,location:'Room 102',notes:'4th grade PLC — discussed fractions unit progress. Ms. Johnson shared her revoicing tally chart.',id:3007},
-    {teacher:'Mr. Patel',date:'April 29',type:'PD',types:['PD'],duration:90,location:'Library',notes:'Led PD session on math discourse. Mr. Patel co-facilitated and shared examples from his classroom.',id:3008},
-    {teacher:'Ms. Chen',date:'April 30',type:'Co-planning, Real-time coaching',types:['Co-planning','Real-time coaching'],duration:50,location:'Room 108',notes:'Co-planned the lesson together, then I stayed and side-by-side coached during execution. She used the chunking strategy we planned.',id:3009},
-    {teacher:'Mr. Rodriguez',date:'April 30',type:'Meeting/Check-in',types:['Meeting/Check-in'],duration:20,location:'Room 205',notes:'Monthly check-in. Reviewed his goals from the year. He wants to focus on differentiation in Q4.',id:3010},
-    {teacher:'Ms. Thompson',date:'April 26',type:'Walkthrough, Meeting/Check-in',types:['Walkthrough','Meeting/Check-in'],duration:20,location:'Room 115',notes:'Walked through during small group time, stayed for a quick check-in. Reviewed her small group rotation plan.',id:3011},
-  ];
-  const sDebriefs=[
-    {teacher:'Ms. Johnson',date:'April 23',lesson:'Fractions — 4th grade',obsId:2000,praise:'Strong number talk launch — wait time was evident and 6 students volunteered vs. usual 2.',change:'Revoicing — teacher restates answers but doesn\'t attribute thinking back to students.',data:'Script from 9:14–9:29: 0 instances of "So what I hear [student] saying is…"',skill:'Targeted revoicing to elevate student voice during discussions.',support:'Model revoicing in next co-teach, then observe.',rtc:true,ready:'Teacher can script 2 revoicing moves during debrief role-play.',q1:'What did you notice about who was talking during the number talk?',q2:'What might happen if students heard their own thinking reflected back?',q3:'',qdata:'Participation tally from observation.',g1:'More students feel ownership of math ideas.',g2:'Builds on her existing strength with wait time.',g3:'Count revoicing moves per 15-min block.',goal:'By May 15, Ms. Johnson will use revoicing at least 3x per number talk. We\'ll know it\'s working when student talk increases.',next:'Follow-up observation May 14.',notes:'Teacher was receptive. Excited to try it.',id:4000},
-    {teacher:'Mr. Brooks',date:'April 30',lesson:'2-step equations — 8th grade algebra',obsId:2006,praise:'Bell ringer task was well-chosen — students were engaged from minute one.',change:'Lesson pacing — bell ringer ran 12 min instead of 5, leaving no time to wrap up.',data:'Timestamps from observation: bell ringer 1:30–1:42, only 1 example completed before 2:00 exit ticket.',skill:'Time-boxing each lesson segment with visible timer for students.',support:'Co-planning sessions to script timing for each segment. Use lesson timer template.',rtc:false,ready:'Teacher can articulate target time for each segment of next lesson.',q1:'How did you decide when to move on from the bell ringer?',q2:'What would you do differently if you only had 30 minutes total?',q3:'',qdata:'Lesson observation timestamps.',g1:'Students get full lessons every day, including practice and reflection.',g2:'Reduces end-of-class stress for the teacher.',g3:'Lesson timer use 4 of 5 days per week.',goal:'By May 20, Mr. Brooks will use a visible lesson timer in 4 of 5 lessons each week. We\'ll know it\'s working when exit tickets happen consistently.',next:'Co-plan Tuesday\'s lesson together with explicit timing.',notes:'Brooks acknowledged pacing has been a recurring concern. Open to trying timer.',id:4001},
-  ];
-  const sResources=[
-    {name:'CGI Problem Types Guide',url:'https://drive.google.com',cat:'Lesson resources',tag:'Number Sense',notes:'Core CGI resource',teacher:'',id:5000},
-    {name:'Math Discourse Sentence Starters',url:'https://drive.google.com',cat:'PD / professional learning',tag:'PD',notes:'Laminated card for teachers',teacher:'',id:5001},
-    {name:'Exit Ticket Templates',url:'https://drive.google.com',cat:'Assessment tools',tag:'Formative',notes:'3 formats',teacher:'Ms. Chen',id:5002},
-  ];
-  const sWorkspaces=[
-    {id:6000,title:'PLC Resources',description:'Links used in weekly PLC meetings',color:'var(--green)',links:[{name:'PLC Agenda (running doc)',url:'https://docs.google.com',notes:'Updated weekly'},{name:'Grade-Level Standards Map',url:'https://drive.google.com',notes:''}]},
-    {id:6001,title:'Planning Resources',description:'Lesson planning tools to share with teachers',color:'var(--blue)',links:[{name:'Unit Planning Template',url:'https://drive.google.com',notes:''},{name:'Lesson Launch Ideas',url:'https://drive.google.com',notes:'Great for number talks'}]},
-  ];
-  S.teachers=[...S.teachers,...sTeachers.filter(st=>!S.teachers.find(t=>t.id===st.id))];
-  S.logs=[...S.logs,...sLogs.filter(sl=>!S.logs.find(l=>l.id===sl.id))];
-  S.interactions=[...S.interactions,...sInteractions.filter(si=>!S.interactions.find(i=>i.id===si.id))];
-  S.debriefs=[...S.debriefs,...sDebriefs.filter(sd=>!S.debriefs.find(d=>d.id===sd.id))];
-  S.resources=[...S.resources,...sResources.filter(sr=>!S.resources.find(r=>r.id===sr.id))];
-  S.workspaces=[...S.workspaces,...sWorkspaces.filter(sw=>!S.workspaces.find(w=>w.id===sw.id))];
-  sampleLoaded=true;
-  save();
-  gi('sample-banner').style.display='flex';
-  gi('sample-btn').style.display='none';
-  renderDash();refreshDDs();refreshSchoolFilters();
-  flash('Sample data loaded!');
-}
-
-function clearSampleData(){
-  if(!confirm('Remove all sample data? Your own data will not be affected.'))return;
-  const sIds=[1000,1001,1002,1003,1004,1005,1006,1007,2000,2001,2002,2003,2004,2005,2006,3000,3001,3002,3003,3004,3005,3006,3007,3008,3009,3010,3011,4000,4001,5000,5001,5002,6000,6001];
-  S.teachers=S.teachers.filter(t=>!sIds.includes(t.id));
-  S.logs=S.logs.filter(l=>!sIds.includes(l.id));
-  S.interactions=S.interactions.filter(i=>!sIds.includes(i.id));
-  S.debriefs=S.debriefs.filter(d=>!sIds.includes(d.id));
-  S.resources=S.resources.filter(r=>!sIds.includes(r.id));
-  S.workspaces=S.workspaces.filter(w=>!sIds.includes(w.id));
-  sampleLoaded=false;
-  gi('sample-banner').style.display='none';
-  gi('sample-btn').style.display='';
-  save();renderDash();refreshDDs();refreshSchoolFilters();
-  flash('Sample data cleared.');
-}
-
 // ── TEACHERS ──
 function addTeacher(){
   const name=gv('tn');if(!name)return;
@@ -1490,7 +1536,7 @@ function openProfile(id){
           </div>
         </div>
         <div style="max-height:380px;overflow-y:auto;padding-right:4px;border:1px solid var(--bdr);border-radius:10px;background:var(--bg);padding:8px;">
-          ${tI.length?tI.map(i=>{const types=i.types&&Array.isArray(i.types)?i.types:(i.type?i.type.split(',').map(s=>s.trim()):['Other']);const badges=types.map(t=>`<span class="log-type-badge lt-${t.toLowerCase().replace(/[\s/]+/g,'-')}">${t}</span>`).join(' ');return `<div class="le" style="cursor:pointer;margin-bottom:6px;" onclick="cm('profile-modal');openIntModal(${i.id})"><div class="le-meta">${badges}${i.duration?`<span class="badge b-x">${i.duration}m</span>`:''}<span style="margin-left:auto;font-size:11px;color:var(--txt3);">${i.date}</span></div>${i.notes?`<div style="font-size:13px;color:var(--txt2);">${i.notes.substring(0,80)}…</div>`:''}<div style="font-size:12px;color:var(--green);margin-top:4px;font-weight:500;">View →</div></div>`;}).join(''):'<div class="empty">None yet.</div>'}
+          ${tI.length?tI.map(i=>{const types=i.types&&Array.isArray(i.types)?i.types:(i.type?i.type.split(',').map(s=>s.trim()):['Other']);const badges=types.map(t=>`<span class="log-type-badge lt-${t.toLowerCase().replace(/[\s/]+/g,'-')}">${t}</span>`).join(' ');const stat=i.status?`<span class="badge b-a">${esc(i.status)}</span>`:(i.duration?`<span class="badge b-x">${i.duration}m</span>`:'');return `<div class="le" style="cursor:pointer;margin-bottom:6px;" onclick="cm('profile-modal');openIntModal(${i.id})"><div class="le-meta">${badges}${stat}<span style="margin-left:auto;font-size:11px;color:var(--txt3);">${i.date}</span></div>${i.notes?`<div style="font-size:13px;color:var(--txt2);">${i.notes.substring(0,80)}…</div>`:''}<div style="font-size:12px;color:var(--green);margin-top:4px;font-weight:500;">View →</div></div>`;}).join(''):'<div class="empty">None yet.</div>'}
         </div>
       </div>
       <div>
@@ -1766,24 +1812,26 @@ function saveInteraction(){
   const date=dateFromISO(gv('ld-int'))||'No date';
   const duration=gv('lint-dur');
   const location=gv('lint-loc');
+  const status=gv('lint-status'); // '' | 'No show' | 'No response'
   const baseId=Date.now();
   const groupId=isMulti?baseId:null;
 
   if(isMulti){
     multiSelectedTeachers.forEach((name,i)=>{
-      S.interactions.push({teacher:name,date,type:types.join(', '),types,duration,location,notes,id:baseId+i,groupId});
+      S.interactions.push({teacher:name,date,type:types.join(', '),types,duration,status,location,notes,id:baseId+i,groupId});
     });
     flash(`✓ Logged for ${multiSelectedTeachers.length} teachers!`);
   } else {
-    S.interactions.push({teacher,date,type:types.join(', '),types,duration,location,notes,id:baseId});
+    S.interactions.push({teacher,date,type:types.join(', '),types,duration,status,location,notes,id:baseId});
     flash('Interaction saved!');
   }
   // Reset
   gi('lt-int').value='';
   multiSelectedTeachers=[];
   gi('lt-int-multi-display').style.display='none';
-  ['ld-int','lint-dur','lint-loc','lint-notes'].forEach(cv);
+  ['ld-int','lint-dur','lint-loc','lint-notes','lint-status'].forEach(cv);
   document.querySelectorAll('input[name="lint-type"]').forEach(cb=>cb.checked=false);
+  document.querySelectorAll('#lfm-int .dur-chip.active').forEach(c=>c.classList.remove('active'));
   closeNewLog();
   save();renderLog();renderLogStats();renderTeachers();renderDash();
 }
@@ -1814,13 +1862,16 @@ function renderLog(){
   };
   items=items.concat(S.interactions.filter(i=>teacherMatch(i.teacher)&&intMatch(i)).map(i=>({...i,_type:'int'})));
 
-  // Sort
-  if(sort==='oldest') items.sort((a,b)=>a.id-b.id);
+  // Sort by the DOCUMENTED date (the coaching date the user typed), not by when the entry
+  // was created. Falls back to entry-creation id when two entries share the same date so
+  // most-recently-entered wins within that day. Entries with no parseable date fall to the bottom.
+  const dateKey=(e)=>{const iso=dateToISO(e.date);return iso||'0000-00-00';};
+  if(sort==='oldest') items.sort((a,b)=>{const c=dateKey(a).localeCompare(dateKey(b));return c!==0?c:(a.id-b.id);});
   else if(sort==='teacher') items.sort((a,b)=>a.teacher.localeCompare(b.teacher));
   else if(sort==='nodebrief'){
     items=items.filter(e=>e._type==='obs'&&!S.debriefs.find(d=>d.obsId===e.id));
-    items.sort((a,b)=>b.id-a.id);
-  } else items.sort((a,b)=>b.id-a.id);
+    items.sort((a,b)=>{const c=dateKey(b).localeCompare(dateKey(a));return c!==0?c:(b.id-a.id);});
+  } else items.sort((a,b)=>{const c=dateKey(b).localeCompare(dateKey(a));return c!==0?c:(b.id-a.id);});
 
   if(!items.length){el.innerHTML='<div class="empty">No entries found.</div>';return;}
 
@@ -1845,11 +1896,13 @@ function renderLog(){
     // Interaction — render each type as its own badge
     const typeList=e.types&&Array.isArray(e.types)?e.types:(e.type?e.type.split(',').map(s=>s.trim()):['Other']);
     const typeBadges=typeList.map(t=>`<span class="log-type-badge lt-${t.toLowerCase().replace(/[\s/]+/g,'-')}">${t}</span>`).join(' ');
+    // Show status badge (No show / No response) if set, otherwise show duration
+    const statusOrDur=e.status?`<span class="badge b-a">${esc(e.status)}</span>`:(e.duration?`<span class="badge b-x">${e.duration}m</span>`:'');
     return `
       <div class="le" style="cursor:pointer;" onclick="openIntModal(${e.id})">
         <div class="le-meta">${avi(e.teacher,26,'var(--green)')}<span style="font-size:13px;font-weight:600;">${e.teacher}</span>
           ${typeBadges}
-          ${e.duration?`<span class="badge b-x">${e.duration}m</span>`:''}
+          ${statusOrDur}
           <span style="margin-left:auto;font-size:11px;color:var(--txt3);">${e.date}</span>
         </div>
         ${e.location?`<div style="font-size:12px;color:var(--txt3);margin-bottom:4px;">📍 ${e.location}</div>`:''}
@@ -1887,12 +1940,14 @@ function exportLogCSV(){
   }
   items=items.concat(S.interactions.filter(i=>teacherMatch(i.teacher)&&intMatch(i)).map(i=>({...i,_type:'int'})));
 
-  if(sort==='oldest') items.sort((a,b)=>a.id-b.id);
+  // Same date-based sort as renderLog so the CSV matches what the user sees on screen
+  const dateKey=(e)=>{const iso=dateToISO(e.date);return iso||'0000-00-00';};
+  if(sort==='oldest') items.sort((a,b)=>{const c=dateKey(a).localeCompare(dateKey(b));return c!==0?c:(a.id-b.id);});
   else if(sort==='teacher') items.sort((a,b)=>a.teacher.localeCompare(b.teacher));
   else if(sort==='nodebrief'){
     items=items.filter(e=>e._type==='obs'&&!S.debriefs.find(d=>d.obsId===e.id));
-    items.sort((a,b)=>b.id-a.id);
-  } else items.sort((a,b)=>b.id-a.id);
+    items.sort((a,b)=>{const c=dateKey(b).localeCompare(dateKey(a));return c!==0?c:(b.id-a.id);});
+  } else items.sort((a,b)=>{const c=dateKey(b).localeCompare(dateKey(a));return c!==0?c:(b.id-a.id);});
 
   if(!items.length){flash('No entries to export.');return;}
 
@@ -1902,7 +1957,7 @@ function exportLogCSV(){
     const s=String(v).replace(/\r?\n/g,' ').replace(/"/g,'""');
     return `"${s}"`;
   };
-  const headers=['Date','Type(s)','Teacher','School','Grade','Duration (min)','Focus area','Location','Notes','Has linked debrief'];
+  const headers=['Date','Type(s)','Teacher','School','Grade','Duration (min)','Status','Focus area','Location','Notes','Has linked debrief'];
   const rows=[headers.map(csvEscape).join(',')];
 
   items.forEach(e=>{
@@ -1917,10 +1972,11 @@ function exportLogCSV(){
     }
     const focusOrTypeNotes=e._type==='obs'?(e.focus||''):'';
     const duration=e._type==='int'?(e.duration||''):'';
+    const status=e._type==='int'?(e.status||(e.duration?'Completed':'')):'';
     const location=e._type==='int'?(e.location||''):'';
     const notes=e.notes||'';
     const hasDebrief=e._type==='obs'?(S.debriefs.find(d=>d.obsId===e.id)?'Yes':'No'):'';
-    const row=[e.date||'',typeStr,e.teacher||'',school,grade,duration,focusOrTypeNotes,location,notes,hasDebrief];
+    const row=[e.date||'',typeStr,e.teacher||'',school,grade,duration,status,focusOrTypeNotes,location,notes,hasDebrief];
     rows.push(row.map(csvEscape).join(','));
   });
 
@@ -2071,7 +2127,7 @@ function openIntModal(id){
     <div style="font-size:16px;font-weight:700;margin-bottom:3px;">${i.teacher}</div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
       ${typeBadges}
-      ${i.duration?`<span class="badge b-x">${i.duration} min</span>`:''}
+      ${i.status?`<span class="badge b-a">${esc(i.status)}</span>`:(i.duration?`<span class="badge b-x">${i.duration} min</span>`:'')}
       <span style="font-size:13px;color:var(--txt3);">${i.date}</span>
       ${i.location?`<span style="font-size:13px;color:var(--txt3);">· ${i.location}</span>`:''}
     </div>
@@ -2084,18 +2140,20 @@ function openIntModal(id){
         ${allTypes.map(t=>`<label class="type-check-item"><input type="checkbox" name="ie-type" value="${t}"${curTypes.includes(t)?' checked':''}> ${t}</label>`).join('')}
       </div>
     </div>
-    <div class="fr2">
-      <div>
-        <label>Duration (min)</label>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-          <input type="number" id="ie-dur" value="${i.duration||''}" min="0" style="max-width:110px;">
-          <div style="display:flex;gap:5px;flex-wrap:wrap;">
-            ${[5,10,15,30,45,60].map(m=>`<button type="button" class="dur-chip" onclick="setDuration('ie-dur',${m})">${m}m</button>`).join('')}
-          </div>
+    <div class="fr">
+      <label>Duration (min) <span style="font-weight:400;color:var(--txt3);font-size:11px;">— or mark status if it didn't happen</span></label>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <input type="number" id="ie-dur" value="${i.duration||''}" min="0" style="max-width:110px;">
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          ${[5,10,15,30,45,60].map(m=>`<button type="button" class="dur-chip" onclick="setDuration('ie-dur',${m})">${m}m</button>`).join('')}
+          <span style="color:var(--txt3);font-size:11px;margin:0 2px;">|</span>
+          <button type="button" class="dur-chip${i.status==='No show'?' active':''}" data-status="No show" onclick="setIntStatus('ie',this)">No show</button>
+          <button type="button" class="dur-chip${i.status==='No response'?' active':''}" data-status="No response" onclick="setIntStatus('ie',this)">No response</button>
         </div>
       </div>
-      <div><label>Location</label><input type="text" id="ie-loc" value="${esc(i.location||'')}"></div>
+      <input type="hidden" id="ie-status" value="${esc(i.status||'')}">
     </div>
+    <div class="fr"><label>Location</label><input type="text" id="ie-loc" value="${esc(i.location||'')}"></div>
     <div class="fr"><label>Notes</label><textarea id="ie-notes" rows="3">${esc(i.notes||'')}</textarea></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-p btn-sm" onclick="saveIntEdit(${i.id})">Save changes</button>
@@ -2116,7 +2174,7 @@ function saveIntEdit(id){
   const i=S.interactions.find(x=>x.id===id);if(!i)return;
   const types=Array.from(document.querySelectorAll('#ie-type-checks input[name="ie-type"]:checked')).map(cb=>cb.value);
   if(!types.length){alert('Please select at least one type.');return;}
-  i.date=dateFromISO(gv('ie-date'))||i.date;i.types=types;i.type=types.join(', ');i.duration=gv('ie-dur');i.location=gv('ie-loc');
+  i.date=dateFromISO(gv('ie-date'))||i.date;i.types=types;i.type=types.join(', ');i.duration=gv('ie-dur');i.status=gv('ie-status');i.location=gv('ie-loc');
   const n=gi('ie-notes');if(n)i.notes=n.value.trim();
   save();renderLog();renderLogStats();renderTeachers();renderDash();
   cm('int-modal');
@@ -2645,9 +2703,15 @@ function openDebrief(id){
       ${orphanFields.map(k=>`<div class="dv-section"><div class="dv-label">${esc(k)}</div><div class="dv-content"><textarea class="dv-edit" data-field="${esc(k)}">${esc(String(d[k]||''))}</textarea></div></div>`).join('')}
     </div>`:'';
 
+  const completeToggle=d.completed
+    ? `<button class="btn btn-o btn-xs" style="padding:2px 8px;" onclick="toggleDebriefComplete(${d.id})" title="Mark as not yet held">↩ Mark as upcoming</button>`
+    : `<button class="btn btn-o btn-xs" style="padding:2px 8px;" onclick="toggleDebriefComplete(${d.id})" title="Mark this debrief as held">✓ Mark as held</button>`;
   gi('dv-content').innerHTML=`
     ${obsPanelHtml}
-    <div style="font-size:17px;font-weight:700;margin-bottom:3px;">${d.teacher} — Debrief</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:3px;flex-wrap:wrap;">
+      <div style="font-size:17px;font-weight:700;">${d.teacher} — Debrief${d.completed?' <span class="badge b-g" style="font-size:10px;vertical-align:middle;">✓ Held</span>':''}</div>
+      ${completeToggle}
+    </div>
     <div style="font-size:13px;color:var(--txt3);margin-bottom:18px;">${d.date||'No date'}${d.lesson?' · '+d.lesson:''}${d.rtc?' · <span class="badge b-a">Real-time coaching</span>':''}${linkedObs?` · <span style="font-size:11px;color:var(--purple);">🔗 Linked to obs ${linkedObs.date}</span>`:''}</div>
     ${sectionsHtml}
     ${orphanHtml}`;
