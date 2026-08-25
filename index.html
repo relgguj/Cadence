@@ -667,15 +667,23 @@ let dashWidgets=[
 ];
 try{const sv=localStorage.getItem('mch_v9');if(sv){const p=JSON.parse(sv);S=p.S||S;dashWidgets=p.dashWidgets||dashWidgets;}}catch(e){}
 // Ensure users who signed in before Tasks/Recent existed still get them added to their layout.
-// Placed below any existing widgets so we don't overlap the user's current arrangement.
-if(!dashWidgets.find(w=>w.id==='tasks')){
-  const maxY=Math.max(0,...dashWidgets.filter(w=>w.on).map(w=>w.y+w.h));
-  dashWidgets.push({id:'tasks',label:'Tasks',on:true,x:0,y:maxY,w:4,h:5});
+// Runs on page load AND after Firestore load (since cloud data can overwrite dashWidgets and
+// wipe out this migration if it only ran once).
+function ensureNewWidgets(){
+  let changed=false;
+  if(!dashWidgets.find(w=>w.id==='tasks')){
+    const maxY=Math.max(0,...dashWidgets.filter(w=>w.on).map(w=>w.y+w.h));
+    dashWidgets.push({id:'tasks',label:'Tasks',on:true,x:0,y:maxY,w:4,h:5});
+    changed=true;
+  }
+  if(!dashWidgets.find(w=>w.id==='recent')){
+    const maxY=Math.max(0,...dashWidgets.filter(w=>w.on).map(w=>w.y+w.h));
+    dashWidgets.push({id:'recent',label:'Recent Activity',on:true,x:0,y:maxY,w:6,h:5});
+    changed=true;
+  }
+  return changed;
 }
-if(!dashWidgets.find(w=>w.id==='recent')){
-  const maxY=Math.max(0,...dashWidgets.filter(w=>w.on).map(w=>w.y+w.h));
-  dashWidgets.push({id:'recent',label:'Recent Activity',on:true,x:0,y:maxY,w:6,h:5});
-}
+ensureNewWidgets();
 // Migrate from old `cols`-only format to Gridstack x/y/w/h
 let _migX=0;
 dashWidgets.forEach(w=>{
@@ -2947,6 +2955,9 @@ window.onUserSignedIn = async function() {
     // We have data in Firestore — use it
     S = cloudData.S;
     if (cloudData.dashWidgets) dashWidgets = cloudData.dashWidgets;
+    // Re-run widget migration in case cloud data was saved before Tasks/Recent existed
+    const changed = ensureNewWidgets();
+    if (changed) save(); // persist the newly added widgets back to Firestore
     console.log("Replaced local data with Firestore data");
     renderDash();
     renderTeachers();
@@ -2982,6 +2993,8 @@ document.addEventListener('visibilitychange', async () => {
       if (currentJson !== cloudJson) {
         S = cloudData.S;
         if (cloudData.dashWidgets) dashWidgets = cloudData.dashWidgets;
+        const changed = ensureNewWidgets();
+        if (changed) save();
         console.log("Refreshed data from cloud (tab became visible)");
         renderDash();
         renderTeachers();
